@@ -18,7 +18,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
     model.train()
     nll_epoch = []
     #loss_array=[]
-    f_loss_writer=open('/home/common/proj/EDM_Protein/Loss/losses.txt', 'a')
+    f_loss_writer=open('/home/common/proj/EDM_Protein/Loss/losses_fulllength100norm_v3.txt', 'a')
     n_iterations = len(loader)
     for i, data in enumerate(loader):
         x = data['positions'].to(device, dtype)
@@ -28,6 +28,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         one_hot_2 = data['one_hot_2'].to(device, dtype)
         charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)
         dihedrals = data['dihedrals'].to(device, dtype)
+        relative_pos = data['relative_pos'].to(device, dtype)
         #phi = (data['phi'] if args.include_charges else torch.zeros(0)).to(device, dtype)
         #psi = (data['psi'] if args.include_charges else torch.zeros(0)).to(device, dtype)
 
@@ -46,10 +47,10 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         if args.data_augmentation:
             x = utils.random_rotation(x).detach()
 
-        check_mask_correct([x, one_hot, one_hot_2, dihedrals, charges], node_mask)
+        check_mask_correct([x, one_hot, one_hot_2, dihedrals, charges, relative_pos], node_mask)
         assert_mean_zero_with_mask(x, node_mask)
 
-        h = {'categorical': one_hot, 'categorical2': one_hot_2, 'integer': charges, 'phipsi': dihedrals} #added 'categorical2': one_hot_2,
+        h = {'categorical': one_hot, 'categorical2': one_hot_2, 'integer': charges, 'phipsi': dihedrals, 'relative_pos': relative_pos} #added 'categorical2': one_hot_2,
 
         if len(args.conditioning) > 0:
             context = proteinutils.prepare_context(args.conditioning, data, property_norms).to(device, dtype)
@@ -156,6 +157,7 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
             one_hot_2 = data['one_hot_2'].to(device, dtype)
             charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)
             dihedrals = data['dihedrals'].to(device, dtype)
+            relative_pos = data['relative_pos'].to(device, dtype)
             #phi = (data['phi'] if args.include_charges else torch.zeros(0)).to(device, dtype)
             #psi = (data['psi'] if args.include_charges else torch.zeros(0)).to(device, dtype)
 
@@ -169,10 +171,10 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
 
             #print('This point 3 is reached')
             x = remove_mean_with_mask(x, node_mask)
-            check_mask_correct([x, one_hot, one_hot_2, dihedrals, charges], node_mask) #added one_hot_2,
+            check_mask_correct([x, one_hot, one_hot_2, dihedrals, charges, relative_pos], node_mask) #added one_hot_2,
             assert_mean_zero_with_mask(x, node_mask)
 
-            h = {'categorical': one_hot, 'categorical2': one_hot_2, 'integer': charges, 'phipsi': dihedrals} #added 'categorical2': one_hot_2,
+            h = {'categorical': one_hot, 'categorical2': one_hot_2, 'integer': charges, 'phipsi': dihedrals, 'relative_pos': relative_pos} #added 'categorical2': one_hot_2,
 
             if len(args.conditioning) > 0:
                 context = proteinutils.prepare_context(args.conditioning, data, property_norms).to(device, dtype)
@@ -189,7 +191,7 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
 
             if partition=='Test':
                 molecule_size=0
-                cat_h = torch.cat([h['categorical'], h['categorical2'], h['phipsi'], h['integer']], dim=2)
+                cat_h = torch.cat([h['categorical'], h['categorical2'], h['phipsi'], h['integer'], h['relative_pos']], dim=2)
                 if partition=='Test':
                     x_list=x.tolist()
                     for molecule in range(len(x_list)):
@@ -202,7 +204,7 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
                 m_size=[]
                 m_size.append(molecule_size)
 
-                max_size=108 #245 #203
+                max_size=203 #116 #14 #21 #5 #108 #245 #203
                 x_list=x.tolist()
                 h_list=cat_h.tolist()
                 if(len(x_list[0])<max_size):
@@ -213,7 +215,7 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
                             zero_list_x.append(0.0)
                         x_list[0].append(zero_list_x)
                         zero_list_h=[]
-                        for j in range(29):
+                        for j in range(28):
                             zero_list_h.append(0.0)
                         h_list[0].append(zero_list_h)
 
@@ -239,9 +241,9 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
                     for p in range(len(coord_list)):
                         prtn_num=protein_number+p
                         #fp=open('/home/common/proj/EDM_Protein/PositionAndOnehot/protein_'+str(prtn_num)+'positions.txt', 'w')
-                        fp=open('/home/common/proj/EDM_Protein/PositionAndOnehot/protein_'+str(molecule_size)+'_0_positions.txt', 'w')
+                        fp=open('/home/common/proj/EDM_Protein/PositionAndOnehot/FullLength_100Norm_v3/protein_'+str(molecule_size)+'_0_positions.txt', 'w')
                         #fo=open('/home/common/proj/EDM_Protein/PositionAndOnehot/protein_'+str(prtn_num)+'one_hot.txt', 'w')
-                        fo=open('/home/common/proj/EDM_Protein/PositionAndOnehot/protein_'+str(molecule_size)+'_0_one_hot.txt', 'w')
+                        fo=open('/home/common/proj/EDM_Protein/PositionAndOnehot/FullLength_100Norm_v3/protein_'+str(molecule_size)+'_0_one_hot.txt', 'w')
                         #fo2=open('/home/common/proj/EDM_Protein/PositionAndOnehot/protein_'+str(prtn_num)+'one_hot_2.txt', 'w')
                         for c in range(len(coord_list[p])):
                             coord_line=coord_list[p][c]

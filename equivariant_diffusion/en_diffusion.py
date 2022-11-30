@@ -283,7 +283,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         self.in_node_nf = in_node_nf
         self.n_dims = n_dims
-        self.num_classes = self.in_node_nf - self.include_charges - 7 #was 3 instead of 7 earlier (because the number of features increased)
+        self.num_classes = self.in_node_nf - self.include_charges - 6 #getting 21; was 3 instead of 6 earlier (because the number of features increased)
 
         self.T = timesteps
         self.parametrization = parametrization
@@ -349,6 +349,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         h_cat_2 = (h['categorical2'].float() - self.norm_biases[1]) / self.norm_values[1] * node_mask
         h_phipsi = (h['phipsi'].float() - self.norm_biases[1]) / self.norm_values[1] * node_mask
         h_int = (h['integer'].float() - self.norm_biases[2]) / self.norm_values[2]
+        h_relative_pos = (h['relative_pos'].float() - self.norm_biases[2]) / self.norm_values[2]
         #h_angle1 = (h['angle1'].float() - self.norm_biases[2]) / self.norm_values[2]
         #h_angle2 = (h['angle2'].float() - self.norm_biases[2]) / self.norm_values[2]
 
@@ -360,11 +361,11 @@ class EnVariationalDiffusion(torch.nn.Module):
             #h_angle2 = h_angle2 * node_mask
 
         # Create new h dictionary.
-        h = {'categorical': h_cat, 'categorical2': h_cat_2, 'integer': h_int, 'phipsi': h_phipsi} #added 'categorical2': h_cat, 'phipsi': h_phipsi
+        h = {'categorical': h_cat, 'categorical2': h_cat_2, 'integer': h_int, 'phipsi': h_phipsi, 'relative_pos': h_relative_pos} #added 'categorical2': h_cat, 'phipsi': h_phipsi
 
         return x, h, delta_log_px
 
-    def unnormalize(self, x, h_cat, h_cat_2, h_int, h_phipsi, node_mask):
+    def unnormalize(self, x, h_cat, h_cat_2, h_int, h_phipsi, h_relative_pos, node_mask):
         x = x * self.norm_values[0]
         h_cat = h_cat * self.norm_values[1] + self.norm_biases[1]
         h_cat = h_cat * node_mask
@@ -373,20 +374,23 @@ class EnVariationalDiffusion(torch.nn.Module):
         h_phipsi = h_phipsi * self.norm_values[1] + self.norm_biases[1]
         h_phipsi = h_phipsi * node_mask
         h_int = h_int * self.norm_values[2] + self.norm_biases[2]
+        h_relative_pos = h_relative_pos * self.norm_values[2] + self.norm_biases[2]
         #h_angle1 = h_angle1 * self.norm_values[2] + self.norm_biases[2]
         #h_angle2 = h_angle2 * self.norm_values[2] + self.norm_biases[2]
 
         if self.include_charges:
             h_int = h_int * node_mask
+            h_relative_pos = h_relative_pos * node_mask
             #h_angle1 = h_angle1 * node_mask
             #h_angle2 = h_angle2 * node_mask
 
-        return x, h_cat, h_cat_2, h_phipsi, h_int
+        return x, h_cat, h_cat_2, h_phipsi, h_int, h_relative_pos
 
     def unnormalize_z(self, z, node_mask):
         # Parse from z
-        x, h_cat, h_cat_2, h_phipsi = z[:, :, 0:self.n_dims], z[:, :, self.n_dims:self.n_dims+self.num_classes], z[:, :, self.n_dims+self.num_classes:self.n_dims+self.num_classes+3], z[:, :, self.n_dims+self.num_classes+3:self.n_dims+self.num_classes+7] #added the last one
-        h_int = z[:, :, self.n_dims+self.num_classes+7:self.n_dims+self.num_classes+8] #changed to 7 and 8 instead of 0 and 1
+        x, h_cat, h_cat_2, h_phipsi = z[:, :, 0:self.n_dims], z[:, :, self.n_dims:self.n_dims+self.num_classes], z[:, :, self.n_dims+self.num_classes:self.n_dims+self.num_classes+3], z[:, :, self.n_dims+self.num_classes+3:self.n_dims+self.num_classes+5] #added the last one
+        h_int = z[:, :, self.n_dims+self.num_classes+5:self.n_dims+self.num_classes+6] #changed to 5 and 6 instead of 0 and 1
+        h_relative_pos = z[:, :, self.n_dims+self.num_classes+6:self.n_dims+self.num_classes+7]
         #h_angle1 = z[:, :, self.n_dims+self.num_classes+3:self.n_dims+self.num_classes+4]
         #h_angle2 = z[:, :, self.n_dims+self.num_classes+4:self.n_dims+self.num_classes+5]
         #print('Printing from unnnn z')
@@ -395,8 +399,8 @@ class EnVariationalDiffusion(torch.nn.Module):
         #assert h_int.size(2) == self.include_charges #Commented this out- Mohimenul
 
         # Unnormalize
-        x, h_cat, h_cat_2, h_phipsi, h_int  = self.unnormalize(x, h_cat, h_cat_2, h_int, h_phipsi, node_mask)
-        output = torch.cat([x, h_cat, h_cat_2, h_phipsi, h_int], dim=2)
+        x, h_cat, h_cat_2, h_phipsi, h_int, h_relative_pos  = self.unnormalize(x, h_cat, h_cat_2, h_int, h_phipsi, h_relative_pos, node_mask)
+        output = torch.cat([x, h_cat, h_cat_2, h_phipsi, h_int, h_relative_pos], dim=2)
         return output
 
     def sigma_and_alpha_t_given_s(self, gamma_t: torch.Tensor, gamma_s: torch.Tensor, target_tensor: torch.Tensor):
@@ -508,18 +512,21 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         x = xh[:, :, :self.n_dims]
 
-        h_int = z0[:, :, -1:] if self.include_charges else torch.zeros(0).to(z0.device)
+        #h_int = z0[:, :, -1:] if self.include_charges else torch.zeros(0).to(z0.device)
+        h_int = z0[:, :, -2:-1] if self.include_charges else torch.zeros(0).to(z0.device)
+        h_relative_pos = z0[:, :, -1:]
         #h_angle1 = z0[:, :, -3:-2]
         #h_angle2 = z0[:, :, -2:-1]
-        x, h_cat, h_cat_2, h_phipsi, h_int = self.unnormalize(x, z0[:, :, self.n_dims:-8], z0[:, :, -8:-5], z0[:, :, -5:-1], h_int, node_mask)
+        x, h_cat, h_cat_2, h_phipsi, h_int, h_relative_pos = self.unnormalize(x, z0[:, :, self.n_dims:-7], z0[:, :, -7:-4], z0[:, :, -4:-2], h_int, h_relative_pos, node_mask)
 
         h_cat = F.one_hot(torch.argmax(h_cat, dim=2), self.num_classes) * node_mask
         h_cat_2 = F.one_hot(torch.argmax(h_cat_2, dim=2), 3) * node_mask #used 3 instead of self.num_classes
         h_phipsi = h_phipsi * node_mask #used 3 instead of self.num_classes
         h_int = torch.round(h_int).long() * node_mask
+        h_relative_pos = torch.round(h_relative_pos).long() * node_mask
         #h_angle1 = torch.round(h_angle1).long() * node_mask
         #h_angle2 = torch.round(h_angle2).long() * node_mask
-        h = {'integer': h_int, 'categorical': h_cat, 'categorical2': h_cat_2, 'phipsi': h_phipsi} #added , 'categorical2': h_cat, 'angle1': h_angle1, 'angle2': h_angle2
+        h = {'integer': h_int, 'categorical': h_cat, 'categorical2': h_cat_2, 'phipsi': h_phipsi, 'relative_pos': h_relative_pos} #added , 'categorical2': h_cat, 'angle1': h_angle1, 'angle2': h_angle2
         return x, h
 
     def sample_normal(self, mu, sigma, node_mask, fix_noise=False):
@@ -531,11 +538,13 @@ class EnVariationalDiffusion(torch.nn.Module):
     def log_pxh_given_z0_without_constants(
             self, x, h, z_t, gamma_0, eps, net_out, node_mask, epsilon=1e-10):
         # Discrete properties are predicted directly from z_t.
-        z_h_cat = z_t[:, :, self.n_dims:-8] if self.include_charges else z_t[:, :, self.n_dims:] #was -1 instead of -8 (earlier was -6)
+        z_h_cat = z_t[:, :, self.n_dims:-7] if self.include_charges else z_t[:, :, self.n_dims:] #was -1 instead of -7 (earlier was -8)
         #print(z_h_cat)
-        z_h_cat_2 = z_t[:, :, -8:-5] if self.include_charges else z_t[:, :, self.n_dims:] #taking last 8 discarding the last sin cos of angle1,angle2 and sa (3 codes for ss)
-        z_h_phipsi = z_t[:, :, -5:-1]
-        z_h_int = z_t[:, :, -1:] if self.include_charges else torch.zeros(0).to(z_t.device)
+        z_h_cat_2 = z_t[:, :, -7:-4] if self.include_charges else z_t[:, :, self.n_dims:] #taking last 7 discarding the last angle1,angle2 and sa and relative pos (3 codes for ss)
+        z_h_phipsi = z_t[:, :, -4:-2]
+        #z_h_int = z_t[:, :, -1:] if self.include_charges else torch.zeros(0).to(z_t.device)
+        z_h_int = z_t[:, :, -2:-1] if self.include_charges else torch.zeros(0).to(z_t.device)
+        z_h_relative_pos = z_t[:, :, -1:]
         #z_h_angle1 = z_t[:, :, -3:-2]
         #z_h_angle2 = z_t[:, :, -2:-1]
 
@@ -554,6 +563,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Compute delta indicator masks.
         h_integer = torch.round(h['integer'] * self.norm_values[2] + self.norm_biases[2]).long()
+        h_relative_pos = torch.round(h['relative_pos'] * self.norm_values[2] + self.norm_biases[2]).long()
         #h_angle1 = torch.round(h['angle1'] * self.norm_values[2] + self.norm_biases[2]).long()
         #h_angle2 = torch.round(h['angle2'] * self.norm_values[2] + self.norm_biases[2]).long()
         onehot = h['categorical'] * self.norm_values[1] + self.norm_biases[1]
@@ -561,6 +571,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         phipsi = h['phipsi'] * self.norm_values[1] + self.norm_biases[1]
 
         estimated_h_integer = z_h_int * self.norm_values[2] + self.norm_biases[2]
+        estimated_h_relative_pos = z_h_relative_pos * self.norm_values[2] + self.norm_biases[2]
         #estimated_h_angle1 = z_h_angle1 * self.norm_values[2] + self.norm_biases[2]
         #estimated_h_angle2 = z_h_angle2 * self.norm_values[2] + self.norm_biases[2]
         estimated_h_cat = z_h_cat * self.norm_values[1] + self.norm_biases[1]
@@ -569,6 +580,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         assert h_integer.size() == estimated_h_integer.size()
 
         h_integer_centered = h_integer - estimated_h_integer
+        h_relative_pos_centered = h_relative_pos - estimated_h_relative_pos
         #h_angle1_centered = h_angle1 - estimated_h_angle1
         #h_angle2_centered = h_angle2 - estimated_h_angle2
 
@@ -579,6 +591,12 @@ class EnVariationalDiffusion(torch.nn.Module):
             - cdf_standard_gaussian((h_integer_centered - 0.5) / sigma_0_int)
             + epsilon)
         log_ph_integer = sum_except_batch(log_ph_integer * node_mask)
+
+        log_ph_relative_pos = torch.log(
+            cdf_standard_gaussian((h_relative_pos_centered + 0.5) / sigma_0_int)
+            - cdf_standard_gaussian((h_relative_pos_centered - 0.5) / sigma_0_int)
+            + epsilon)
+        log_ph_relative_pos = sum_except_batch(log_ph_relative_pos * node_mask)
 
         '''log_ph_angle1 = torch.log(
             cdf_standard_gaussian((h_angle1_centered + 0.5) / sigma_0_int)
@@ -634,7 +652,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         log_ph_phipsi = sum_except_batch(log_probabilities_phipsi * phipsi * node_mask)
 
         # Combine categorical and integer log-probabilities.
-        log_p_h_given_z = log_ph_integer + log_ph_cat + log_ph_cat_2 + log_ph_phipsi #Modified this line (Mohimenul) added + log_ph_cat_2 + log_ph_phipsi
+        log_p_h_given_z = log_ph_integer + log_ph_cat + log_ph_cat_2 + log_ph_phipsi + log_ph_relative_pos #Modified this line (Mohimenul) added + log_ph_cat_2 + log_ph_phipsi + log_ph_relative_pos
 
         # Combine log probabilities for x and h.
         log_p_xh_given_z = log_p_x_given_z_without_constants + log_p_h_given_z
@@ -694,7 +712,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         #print((h['categorical'][0][3]))
         #print((h['categorical'][0][4]))
         #print((h['integer'][0]))
-        xh = torch.cat([x, h['categorical'], h['categorical2'], h['phipsi'], h['integer']], dim=2) #added h['categorical2'],
+        xh = torch.cat([x, h['categorical'], h['categorical2'], h['phipsi'], h['integer'], h['relative_pos']], dim=2) #added h['categorical2'],
         #print(alpha_t)
         #print(x)
         #print(h['categorical'])
@@ -928,6 +946,8 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         z=test_z #Added this- Mohimenul
 
+        diffusion_steps=[1000, 999, 998, 997, 996, 4, 3, 2, 1] #Diffusion steps to store; Added this
+
         #print(self.T)
         # Iteratively sample p(z_s | z_t) for t = 1, ..., T, with s = t - 1.
         for s in reversed(range(0, self.T)):
@@ -940,14 +960,16 @@ class EnVariationalDiffusion(torch.nn.Module):
             #print('printing z shape from en_diffusion.py line 917')
             #print(z.shape)
             #print(s)
-            if (s+1)%10==0:
-                unnorm_z = self.unnormalize_z(z, node_mask)
+            if (s+1)%50==0 or ((s+1) in diffusion_steps):
+                #unnorm_z = self.unnormalize_z(z, node_mask)
+                unnorm_z = z #Skipping the unnormalizatin process
                 #print('Printing slicing')
                 #print(self.n_dims)
                 #print(self.num_classes)
                 #print(self.n_dims+self.num_classes)
-                interm_x, interm_h_cat, interm_h_cat_2, interm_h_phipsi = unnorm_z[:, :, 0:self.n_dims], unnorm_z[:, :, self.n_dims:self.n_dims+self.num_classes], unnorm_z[:, :, self.n_dims+self.num_classes:self.n_dims+self.num_classes+3], unnorm_z[:, :, self.n_dims+self.num_classes+3:self.n_dims+self.num_classes+7] #added the last one
-                interm_h_int = unnorm_z[:, :, self.n_dims+self.num_classes+7:self.n_dims+self.num_classes+8] #changed to 7 and 8 instead of 0 and 1
+                interm_x, interm_h_cat, interm_h_cat_2, interm_h_phipsi = unnorm_z[:, :, 0:self.n_dims], unnorm_z[:, :, self.n_dims:self.n_dims+self.num_classes], unnorm_z[:, :, self.n_dims+self.num_classes:self.n_dims+self.num_classes+3], unnorm_z[:, :, self.n_dims+self.num_classes+3:self.n_dims+self.num_classes+5] #added the last one
+                interm_h_int = unnorm_z[:, :, self.n_dims+self.num_classes+5:self.n_dims+self.num_classes+6] #changed to 5 and 6 instead of 0 and 1
+                interm_h_relative_pos = unnorm_z[:, :, self.n_dims+self.num_classes+6:self.n_dims+self.num_classes+7]
                 #interm_h_angle1 = unnorm_z[:, :, self.n_dims+self.num_classes+3:self.n_dims+self.num_classes+4]
                 #interm_h_angle2 = unnorm_z[:, :, self.n_dims+self.num_classes+4:self.n_dims+self.num_classes+5]
 
@@ -962,8 +984,8 @@ class EnVariationalDiffusion(torch.nn.Module):
                 one_hot_list=interm_h_cat.tolist()
                 #one_hot_list_2=one_hot_2.tolist()
                 for p in range(len(coord_list)):
-                    fp=open('/home/common/proj/EDM_Protein/PositionAndOnehot/protein_'+str(protein_size)+'_'+str(s+1)+'_positions.txt', 'w')
-                    fo=open('/home/common/proj/EDM_Protein/PositionAndOnehot/protein_'+str(protein_size)+'_'+str(s+1)+'_one_hot.txt', 'w')
+                    fp=open('/home/common/proj/EDM_Protein/PositionAndOnehot/FullLength_100Norm_v3/protein_'+str(protein_size)+'_'+str(s+1)+'_positions.txt', 'w')
+                    fo=open('/home/common/proj/EDM_Protein/PositionAndOnehot/FullLength_100Norm_v3/protein_'+str(protein_size)+'_'+str(s+1)+'_one_hot.txt', 'w')
                     #fo2=open('/home/common/proj/EDM_Protein/PositionAndOnehot/protein_'+str(prtn_num)+'one_hot_2.txt', 'w')
                     for c in range(len(coord_list[p])):
                         coord_line=coord_list[p][c]

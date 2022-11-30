@@ -9,7 +9,7 @@ from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 
 def get_model(args, device, dataset_info, dataloader_train):
     histogram = dataset_info['n_nodes']
-    in_node_nf = len(dataset_info['atom_decoder']) + len(dataset_info['ss_decoder']) + int(args.include_charges) + 4 #added + len(dataset_info['atom_decoder']) +4 for sin cos of the angles
+    in_node_nf = len(dataset_info['atom_decoder']) + len(dataset_info['ss_decoder']) + int(args.include_charges) + 3 #added + len(dataset_info['atom_decoder']) +3 for two angles and relative position
     #in_node_nf = 11
     nodes_dist = DistributionNodes(histogram)
 

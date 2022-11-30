@@ -150,14 +150,14 @@ def gen_splits_gdb9(gdb9dir, cleanup=True):
 
     # Now generate random permutations to assign molecules to training/validation/test sets.
     #Nmols = Ngdb9 - Nexcluded
-    Nmols = 6 #16 #106 #606
+    Nmols = 106 #12 #6 #16 #106 #606
 
     #Ntrain = 100000
     #Ntest = int(0.1*Nmols)
     #Nvalid = Nmols - (Ntrain + Ntest)
-    Ntrain = 2 #8 #90 #500
-    Ntest = 2 #4 #6 #6
-    Nvalid = 2 #4 #10 #100
+    Ntrain = 90 #4 #2 #8 #90 #500
+    Ntest = 6 #4 #2 #4 #6 #6
+    Nvalid = 10 #4 #2 #4 #10 #100
     #Nvalid = Nmols - (Ntrain + Ntest)
     #print('Ntrain')
     #print(Ntrain)

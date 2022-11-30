@@ -35,8 +35,8 @@ def retrieve_dataloaders(cfg):
                                                                         subtract_thermo=args.subtract_thermo,
                                                                         force_download=args.force_download,
                                                                         remove_h=cfg.remove_h)
-        qm9_to_eV = {'U0': 27.2114, 'U': 27.2114, 'G': 27.2114, 'H': 27.2114, 'zpve': 27211.4, 'gap': 27.2114, 'homo': 27.2114,
-                     'lumo': 27.2114}
+        #qm9_to_eV = {'U0': 27.2114, 'U': 27.2114, 'G': 27.2114, 'H': 27.2114, 'zpve': 27211.4, 'gap': 27.2114, 'homo': 27.2114,
+        #             'lumo': 27.2114}
 
         #####Modifications#####
         '''positions=[]
@@ -93,8 +93,8 @@ def retrieve_dataloaders(cfg):
         for dataset in datasets.values():
             #print('Printing dataset from qm9 dataset')
             #print(dataset)
-            dataset.convert_units(qm9_to_eV) #Commented this out (Mohimenul)
-            #pass
+            #dataset.convert_units(qm9_to_eV) #Commented this out (Mohimenul)
+            pass
 
         #for x in datasets.items():
             #print(type(x[1]))

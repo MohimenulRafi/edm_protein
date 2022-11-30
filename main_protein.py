@@ -20,7 +20,7 @@ import pickle
 from protein.utils import prepare_context, compute_mean_mad
 from train_test import train_epoch, test, analyze_and_save
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
+#os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
 
 import gc
 gc.collect()
@@ -134,7 +134,7 @@ atom_decoder = dataset_info['atom_decoder']
 args.wandb_usr = utils.get_wandb_username(args.wandb_usr)
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-device = torch.device("cuda:0" if args.cuda else "cpu") #Was cuda only instead of cuda:0
+device = torch.device("cuda:2" if args.cuda else "cpu") #Was cuda only instead of cuda:0
 dtype = torch.float32
 
 if args.resume is not None:
@@ -207,6 +207,7 @@ if prop_dist is not None:
 
 #model = torch.nn.DataParallel(model) #added this line
 model = model.to(device)
+model_test = model_test.to(device)
 optim = get_optim(args, model)
 # print(model)
 
@@ -243,7 +244,7 @@ def main():
         ema = flow_utils.EMA(args.ema_decay)
 
         if args.dp and torch.cuda.device_count() > 1:
-            model_ema_dp = model_ema #torch.nn.DataParallel(model_ema) #model_ema #was torch.nn.DataParallel(model_ema)
+            model_ema_dp = model_ema #model_ema #torch.nn.DataParallel(model_ema) #model_ema #was torch.nn.DataParallel(model_ema)
         else:
             model_ema_dp = model_ema
     else:

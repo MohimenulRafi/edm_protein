@@ -98,6 +98,7 @@ class PreprocessProtein:
 
         if self.load_charges:
             batch['charges'] = batch['charges'].unsqueeze(2)
+            batch['relative_pos'] = batch['relative_pos'].unsqueeze(2)
             #batch['phi'] = batch['phi'].unsqueeze(2)
             #batch['psi'] = batch['psi'].unsqueeze(2)
         else:

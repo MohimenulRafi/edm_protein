@@ -284,6 +284,7 @@ def process_xyz_protein(protein_file, protein, number, split_type): #First param
     #psi=[]
     dihedrals=[]
     sa=[]
+    relative_pos=[]
 
     phi_value=0.0
     psi_value=0.0
@@ -295,6 +296,51 @@ def process_xyz_protein(protein_file, protein, number, split_type): #First param
     #print('Number of Ca')
     #print(len(proteinDssp))
     for ds1 in range(len(proteinDssp)): #Was len(proteinDssp) instead of 9
+        #(protein_name=='1hkfA' and (ds1>=28 and ds1<=47)) or (protein_name=='1hlqA' and (ds1>=3 and ds1<=17)) or (protein_name=='1bl0A' and (ds1>=1 and ds1<=18)) or (protein_name=='1qysA' and (ds1>=14 and ds1<=34))
+        #(protein_name=='1hkfA' and (ds1>=28 and ds1<=35)) or (protein_name=='1hlqA' and (ds1>=9 and ds1<=22)) or (protein_name=='1bl0A' and (ds1>=1 and ds1<=9)) or (protein_name=='1qysA' and (ds1>=25 and ds1<=34))
+        #(protein_name=='1hkfA' and (ds1>=3 and ds1<=7)) or (protein_name=='1hlqA' and (ds1>=9 and ds1<=12))
+        '''if (protein_name=='1hkfA' and (ds1>=28 and ds1<=47)) or (protein_name=='1hlqA' and (ds1>=3 and ds1<=17)) or (protein_name=='1bl0A' and (ds1>=1 and ds1<=18)) or (protein_name=='1qysA' and (ds1>=14 and ds1<=34)):
+            coord=[]
+            phipsi=[]
+            res1=proteinDssp[ds1][13:14].strip()
+            res_index=getResidueTypeIndex(res1)
+            #residue_index.append(res_index+1) #Numbers are going to be between 1 and 21 instead of 0 and 20
+            #res_code=aaGroup(res1)
+            #residue_code.append(res_code)
+            residue_code.append(res_index+1)
+            ss1 = get8to3ss(proteinDssp[ds1][16:(16+1)])
+            ss_index=getSSIndex(ss1)
+            ss_code.append(ss_index+1)
+            #one_hot=getOneHotRepresentation(res1)
+            #protein_feature.append(one_hot)
+            #calculate the residue type and return the info with the dictionary molecule ########## THINK ABOUT THIS IDEA
+
+            if(isfloat(proteinDssp[ds1][103:(103+6)].strip())):
+                phi_value = float(proteinDssp[ds1][103:(103+6)].strip())
+            if(isfloat(proteinDssp[ds1][109:(109+6)].strip())):
+                psi_value = float(proteinDssp[ds1][109:(109+6)].strip())
+            #phi.append(phi_value)
+            #psi.append(psi_value)
+            phipsi.append(math.sin(phi_value))
+            phipsi.append(math.cos(phi_value))
+            phipsi.append(math.sin(psi_value))
+            phipsi.append(math.cos(psi_value))
+            dihedrals.append(phipsi)
+
+            if(isfloat(proteinDssp[ds1][35:(35+3)])):
+                sa_value = float(proteinDssp[ds1][35:(35+3)])
+                sa_value = sigmoid(sa_value)
+            sa.append(sa_value)
+
+            x1=float(proteinDssp[ds1][117:(117+5)])
+            y1=float(proteinDssp[ds1][124:(124+5)])
+            z1=float(proteinDssp[ds1][131:(131+5)])
+            coord.append(x1)
+            coord.append(y1)
+            coord.append(z1)
+            protein_position.append(coord)'''
+    for ds1 in range(len(proteinDssp)): #Was len(proteinDssp) instead of 9
+        #if (protein_name=='1hkfA' and (ds1>=3 and ds1<=7)) or (protein_name=='1hlqA' and (ds1>=9 and ds1<=12)):
         coord=[]
         phipsi=[]
         res1=proteinDssp[ds1][13:14].strip()
@@ -316,16 +362,21 @@ def process_xyz_protein(protein_file, protein, number, split_type): #First param
             psi_value = float(proteinDssp[ds1][109:(109+6)].strip())
         #phi.append(phi_value)
         #psi.append(psi_value)
-        phipsi.append(math.sin(phi_value))
-        phipsi.append(math.cos(phi_value))
-        phipsi.append(math.sin(psi_value))
-        phipsi.append(math.cos(psi_value))
+        #phipsi.append(math.sin(phi_value))
+        #phipsi.append(math.cos(phi_value))
+        #phipsi.append(math.sin(psi_value))
+        #phipsi.append(math.cos(psi_value))
+        phipsi.append(math.radians(phi_value))
+        phipsi.append(math.radians(psi_value))
         dihedrals.append(phipsi)
 
         if(isfloat(proteinDssp[ds1][35:(35+3)])):
             sa_value = float(proteinDssp[ds1][35:(35+3)])
             sa_value = sigmoid(sa_value)
         sa.append(sa_value)
+
+        rel_pos=float((ds1+1)/len(proteinDssp))
+        relative_pos.append(rel_pos)
 
         x1=float(proteinDssp[ds1][117:(117+5)])
         y1=float(proteinDssp[ds1][124:(124+5)])
@@ -367,7 +418,7 @@ def process_xyz_protein(protein_file, protein, number, split_type): #First param
     #mol_props = dict(zip(prop_strings, mol_props))
     #mol_props['omega1'] = 0.0 #was max(float(omega) for omega in mol_freq.split())
 
-    molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions, 'residue_code': residue_code, 'ss_code': ss_code, 'dihedrals': dihedrals}
+    molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions, 'residue_code': residue_code, 'ss_code': ss_code, 'dihedrals': dihedrals, 'relative_pos': relative_pos}
     #molecule.update(mol_props)
     molecule = {key: torch.tensor(val) for key, val in molecule.items()}
     #print('Printing molecule from process file')
